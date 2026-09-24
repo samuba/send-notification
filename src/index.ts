@@ -1,19 +1,15 @@
 export interface Env {
-	RESEND_API_KEY: string;
 	SECRET_KEY: string;
-	NOTIFY_TO: string;
-	NOTIFY_FROM: string;
+	TELEGRAM_BOT_TOKEN: string;
+	TELEGRAM_CHAT_ID: string;
 }
-
-type NotificationMethod = 'email';
 
 type Notification = {
 	subject: string;
 	text: string;
-	method: NotificationMethod;
 };
 
-const requiredEnv = ['RESEND_API_KEY', 'SECRET_KEY', 'NOTIFY_TO', 'NOTIFY_FROM'] as const;
+const requiredEnv = ['SECRET_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'] as const;
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
@@ -43,12 +39,12 @@ export default {
 
 		const notification = parsed.value;
 		ctx.waitUntil(
-			sendNotification(notification, env).then(
-				(id) => console.log('Sent notification', notification.method, id),
+			sendTelegram(notification, env).then(
+				(id) => console.log('Sent notification', id),
 				(error) => console.error('Failed to send notification', error),
 			),
 		);
-		return json({ ok: true, method: notification.method });
+		return json({ ok: true });
 	},
 } satisfies ExportedHandler<Env>;
 
@@ -66,42 +62,40 @@ function parseNotification(body: unknown): { ok: true; value: Notification } | {
 	if (!text) return { ok: false, error: 'text is required' };
 	if (text.length > 100_000) return { ok: false, error: 'text must be 100000 characters or fewer' };
 
-	const method = record.method;
-	if (method !== undefined && method !== null && method !== '' && method !== 'email') {
-		return { ok: false, error: 'method must be empty or "email"' };
-	}
-
-	return { ok: true, value: { subject, text, method: 'email' } };
+	return { ok: true, value: { subject, text } };
 }
 
-async function sendNotification(notification: Notification, env: Env): Promise<string> {
-	switch (notification.method) {
-		case 'email':
-			return sendEmail(notification, env);
-	}
-}
-
-async function sendEmail(notification: Notification, env: Env): Promise<string> {
-	const response = await fetch('https://api.resend.com/emails', {
+async function sendTelegram(notification: Notification, env: Env): Promise<string> {
+	const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
 		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${env.RESEND_API_KEY}`,
-			'Content-Type': 'application/json',
-		},
+		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
-			from: env.NOTIFY_FROM,
-			to: [env.NOTIFY_TO],
-			subject: notification.subject,
-			text: notification.text,
+			chat_id: env.TELEGRAM_CHAT_ID,
+			parse_mode: 'HTML',
+			text: telegramText(notification),
 		}),
 	});
 
-	const payload = (await response.json().catch(() => null)) as { id?: string; message?: string } | null;
-	if (!response.ok || !payload?.id) {
-		throw new Error(`Resend returned ${response.status}: ${payload?.message ?? response.statusText}`);
+	const payload = (await response.json().catch(() => null)) as {
+		ok?: boolean;
+		description?: string;
+		result?: { message_id?: number };
+	} | null;
+	if (!response.ok || !payload?.ok || payload.result?.message_id == null) {
+		throw new Error(`Telegram returned ${response.status}: ${payload?.description ?? response.statusText}`);
 	}
 
-	return payload.id;
+	return String(payload.result.message_id);
+}
+
+function telegramText(notification: Notification): string {
+	const header = `<b>${escapeHtml(notification.subject)}</b>\n\n`;
+	const text = escapeHtml(notification.text).slice(0, Math.max(0, 4096 - header.length));
+	return `${header}${text}`;
+}
+
+function escapeHtml(value: string): string {
+	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function isAuthorized(body: unknown, secretKey: string): boolean {

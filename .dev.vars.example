@@ -1,5 +1,4 @@
 # Copy to .dev.vars for `wrangler dev`. Set the same names in production with `wrangler secret put`.
-RESEND_API_KEY=
 SECRET_KEY=
-NOTIFY_TO=
-NOTIFY_FROM=
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=

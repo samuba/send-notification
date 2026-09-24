@@ -1,8 +1,6 @@
 # send-notification
 
-A Cloudflare Worker that other services call when something happens, such as a server error. It always notifies the same person. Email is the first delivery method, sent through the Resend HTTP API. The Worker answers as soon as the request is valid and sends the email in the background.
-
-Other methods, such as Telegram, can be added later. Callers choose one with `method`. An empty `method` means email.
+A Cloudflare Worker that other services call when something happens, such as a server error. It always notifies the same person on Telegram, through the Bot API. The caller does not choose how the notification is delivered. The Worker answers as soon as the request is valid and sends the message in the background.
 
 ## Request
 
@@ -12,15 +10,12 @@ Other methods, such as Telegram, can be added later. Callers choose one with `me
 {
   "secretKey": "...",
   "subject": "Server error",
-  "text": "Worker X crashed",
-  "method": "email"
+  "text": "Worker X crashed"
 }
 ```
 
-`method` may be omitted, `""`, or `"email"`.
-
-A valid request returns `{"ok": true, "method": "email"}` before Resend responds.
+A valid request returns `{"ok": true}` before Telegram responds. The subject is sent in bold.
 
 ## Environment
 
-`RESEND_API_KEY`, `SECRET_KEY`, `NOTIFY_TO`, and `NOTIFY_FROM` are Worker secrets. Copy `.dev.vars.example` to `.dev.vars` for local development.
+`SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` are Worker secrets. Copy `.dev.vars.example` to `.dev.vars` for local development.
